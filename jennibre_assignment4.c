@@ -10,8 +10,6 @@
 #define INPUTLENGTH 2048
 
 int allowBackground = 1;
-pid_t backgroundPids[512];
-int backgroundStatus[512];
 
 void getInput(char*[], int*, char[], char[], int);
 void execCmd(char*[], int*, struct sigaction, int*, char[], char[]);
@@ -189,15 +187,20 @@ void execCmd(char* arr[], int* childExitStatus, struct sigaction sa, int* backgr
         default: // Parent process
             if (*background && allowBackground) {
                 // If background process, do not block the terminal
-                backgroundPids[*backgroundStatus] = spawnPid;
-                backgroundStatus[*backgroundStatus] = 0; // Track if the background process is done
                 printf("background pid is %d\n", spawnPid);
                 fflush(stdout);
-                // Do not wait for background processes right now
-                *backgroundStatus += 1;
+                // Wait for the process but do not block (non-blocking)
+                waitpid(spawnPid, childExitStatus, WNOHANG);
             } else {
                 // If foreground process, wait for it to finish
                 waitpid(spawnPid, childExitStatus, 0);
+            }
+
+            // Clean up and check for terminated background processes
+            while ((spawnPid = waitpid(-1, childExitStatus, WNOHANG)) > 0) {
+                printf("child %d terminated\n", spawnPid);
+                printExitStatus(*childExitStatus);
+                fflush(stdout);
             }
     }
 }
