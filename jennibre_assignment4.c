@@ -21,6 +21,18 @@ void catchSIGINT(int signo) {
     fflush(stdout);
 }
 
+void catchSIGTSTP(int signo) {
+    if (allowBackground) {
+        char* message = "Entering foreground-only mode (& is now ignored)\n";
+        write(STDOUT_FILENO, message, strlen(message));
+        allowBackground = 0;
+    } else {
+        char* message = "Exiting foreground-only mode\n";
+        write(STDOUT_FILENO, message, strlen(message));
+        allowBackground = 1;
+    }
+}
+
 int main() {
     int pid = getpid();
     int cont = 1;
@@ -138,11 +150,12 @@ void execCmd(char* arr[], int* childExitStatus, struct sigaction sa, int* backgr
             perror("fork");
             exit(1);
             break;
-        
-        case 0:
+
+        case 0: // Child process
             sa.sa_handler = SIG_DFL;
             sigaction(SIGINT, &sa, NULL);
 
+            // Handle input redirection
             if (strcmp(inputName, "")) {
                 input = open(inputName, O_RDONLY);
                 if (input == -1) {
@@ -153,6 +166,7 @@ void execCmd(char* arr[], int* childExitStatus, struct sigaction sa, int* backgr
                 close(input);
             }
 
+            // Handle output redirection
             if (strcmp(outputName, "")) {
                 output = open(outputName, O_WRONLY | O_CREAT | O_TRUNC, 0666);
                 if (output == -1) {
@@ -163,38 +177,31 @@ void execCmd(char* arr[], int* childExitStatus, struct sigaction sa, int* backgr
                 close(output);
             }
 
-            if (execvp(arr[0], arr)) {
+            // Execute the command
+            if (execvp(arr[0], arr) == -1) {
                 perror("execvp");
                 exit(2);
             }
             break;
 
-        default:
+        default: // Parent process
             if (*background && allowBackground) {
+                // If background process, do not block the terminal
                 printf("background pid is %d\n", spawnPid);
                 fflush(stdout);
+                // Wait for the process but do not block (non-blocking)
                 waitpid(spawnPid, childExitStatus, WNOHANG);
             } else {
+                // If foreground process, wait for it to finish
                 waitpid(spawnPid, childExitStatus, 0);
             }
 
+            // Clean up and check for terminated background processes
             while ((spawnPid = waitpid(-1, childExitStatus, WNOHANG)) > 0) {
                 printf("child %d terminated\n", spawnPid);
                 printExitStatus(*childExitStatus);
                 fflush(stdout);
             }
-    }
-}
-
-void catchSIGTSTP(int signo) {
-    if (allowBackground) {
-        char* message = "Entering foreground-only mode (& is now ignored)\n";
-        write(STDOUT_FILENO, message, strlen(message));
-        allowBackground = 0;
-    } else {
-        char* message = "Exiting foreground-only mode\n";
-        write(STDOUT_FILENO, message, strlen(message));
-        allowBackground = 1;
     }
 }
 
