@@ -15,12 +15,9 @@ void getInput(char*[], int*, char[], char[], int);
 void excmd(char*[], int*, struct sigaction, int*, char[], char[]);
 void catchSIGTSTP(int);
 void printExitStatus(int);
+void catchSIGCHLD(int);
 
-void catchSIGINT(int signo) {
-    printf("Caught SIGINT\n");
-    fflush(stdout);
-}
-
+/* Handle SIGTSTP (^Z) to toggle foreground-only mode */
 void catchSIGTSTP(int signo) {
     if (allowBackground) {
         char* message = "Entering foreground-only mode (& is now ignored)\n";
@@ -33,7 +30,19 @@ void catchSIGTSTP(int signo) {
     }
 }
 
-/*Main function*/
+/* Handle SIGCHLD to detect when background processes exit */
+void catchSIGCHLD(int signo) {
+    int childExitStatus;
+    pid_t childPid;
+
+    while ((childPid = waitpid(-1, &childExitStatus, WNOHANG)) > 0) {
+        printf("child %d terminated\n", childPid);
+        printExitStatus(childExitStatus);
+        fflush(stdout);
+    }
+}
+
+/* Main function */
 int main() {
     int pid = getpid();
     int cont = 1;
@@ -45,20 +54,26 @@ int main() {
     char outputFile[256] = "";
     char* input[512] = {NULL};
 
-
-    /* Ignore ^C*/
+    /* Ignore SIGINT (^C) */
     struct sigaction sa_sigint = {0};
     sa_sigint.sa_handler = SIG_IGN;
     sigfillset(&sa_sigint.sa_mask);
     sa_sigint.sa_flags = 0;
     sigaction(SIGINT, &sa_sigint, NULL);
 
-    /*Handle ^Z to toggle foreground-only mode*/
+    /* Handle SIGTSTP (^Z) */
     struct sigaction sa_sigtstp = {0};
     sa_sigtstp.sa_handler = catchSIGTSTP;
     sigfillset(&sa_sigtstp.sa_mask);
     sa_sigtstp.sa_flags = SA_RESTART;
     sigaction(SIGTSTP, &sa_sigtstp, NULL);
+
+    /* Handle SIGCHLD (background process termination) */
+    struct sigaction sa_sigchld = {0};
+    sa_sigchld.sa_handler = catchSIGCHLD;
+    sigfillset(&sa_sigchld.sa_mask);
+    sa_sigchld.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+    sigaction(SIGCHLD, &sa_sigchld, NULL);
 
     do {
         printf(": ");
@@ -97,7 +112,7 @@ int main() {
     return 0;
 }
 
-/*Prompts the user for input and parses it into an array*/
+/* Prompts the user for input and parses it into an array */
 void getInput(char* arr[], int* background, char inputName[], char outputName[], int pid) {
     char input[INPUTLENGTH];
 
@@ -142,7 +157,7 @@ void getInput(char* arr[], int* background, char inputName[], char outputName[],
     arr[i] = NULL;
 }
 
-/*execute the command parsed into the array*/
+/* Execute the command parsed into the array */
 void excmd(char* arr[], int* childExitStatus, struct sigaction sa, int* background, char inputName[], char outputName[]) {
     int input, output;
     pid_t spawnPid = fork();
@@ -153,7 +168,7 @@ void excmd(char* arr[], int* childExitStatus, struct sigaction sa, int* backgrou
             exit(1);
             break;
 
-        case 0: /* Child process*/
+        case 0: /* Child process */
             sa.sa_handler = SIG_DFL;
             sigaction(SIGINT, &sa, NULL);
 
@@ -183,7 +198,7 @@ void excmd(char* arr[], int* childExitStatus, struct sigaction sa, int* backgrou
             }
             break;
 
-        default: /* Parent process*/
+        default: /* Parent process */
             if (*background && allowBackground) {
                 printf("background pid is %d\n", spawnPid);
                 fflush(stdout);
@@ -191,16 +206,10 @@ void excmd(char* arr[], int* childExitStatus, struct sigaction sa, int* backgrou
             } else {
                 waitpid(spawnPid, childExitStatus, 0);
             }
-
-            while ((spawnPid = waitpid(-1, childExitStatus, WNOHANG)) > 0) {
-                printf("child %d terminated\n", spawnPid);
-                printExitStatus(*childExitStatus);
-                fflush(stdout);
-            }
     }
 }
 
-/*Calls Exit status*/
+/* Print exit status */
 void printExitStatus(int childExitMethod) {
     if (WIFEXITED(childExitMethod)) {
         printf("exit value %d\n", WEXITSTATUS(childExitMethod));
