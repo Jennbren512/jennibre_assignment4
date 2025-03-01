@@ -12,7 +12,7 @@
 int allowBackground = 1;
 
 void getInput(char*[], int*, char[], char[], int);
-void execCmd(char*[], int*, struct sigaction, int*, char[], char[]);
+void excmd(char*[], int*, struct sigaction, int*, char[], char[]);
 void catchSIGTSTP(int);
 void printExitStatus(int);
 
@@ -46,18 +46,18 @@ int main() {
 
     // Signal Handlers
 
-    // Ignore ^C
+    /*Ignore ^C*/
     struct sigaction sa_sigint = {0};
     sa_sigint.sa_handler = SIG_IGN;
     sigfillset(&sa_sigint.sa_mask);
     sa_sigint.sa_flags = 0;
     sigaction(SIGINT, &sa_sigint, NULL);
 
-    // Handle ^Z to toggle foreground-only mode
+    /*Handle ^Z*/
     struct sigaction sa_sigtstp = {0};
     sa_sigtstp.sa_handler = catchSIGTSTP;
     sigfillset(&sa_sigtstp.sa_mask);
-    sa_sigtstp.sa_flags = SA_RESTART;  // Ensures system calls (e.g., fgets) are not interrupted
+    sa_sigtstp.sa_flags = SA_RESTART;
     sigaction(SIGTSTP, &sa_sigtstp, NULL);
 
     do {
@@ -81,7 +81,7 @@ int main() {
         } else if (strcmp(input[0], "status") == 0) {
             printExitStatus(exitStatus);
         } else {
-            execCmd(input, &exitStatus, sa_sigint, &background, inputFile, outputFile);
+            excmd(input, &exitStatus, sa_sigint, &background, inputFile, outputFile);
         }
 
         for (i = 0; input[i]; i++) {
@@ -97,6 +97,7 @@ int main() {
     return 0;
 }
 
+/*Prompts the input and parses the input into an array*/
 void getInput(char* arr[], int* background, char inputName[], char outputName[], int pid) {
     char input[INPUTLENGTH];
 
@@ -141,7 +142,8 @@ void getInput(char* arr[], int* background, char inputName[], char outputName[],
     arr[i] = NULL;
 }
 
-void execCmd(char* arr[], int* childExitStatus, struct sigaction sa, int* background, char inputName[], char outputName[]) {
+/*Executes the command that is passed into the array*/
+void excmd(char* arr[], int* childExitStatus, struct sigaction sa, int* background, char inputName[], char outputName[]) {
     int input, output;
     pid_t spawnPid = fork();
 
@@ -151,15 +153,15 @@ void execCmd(char* arr[], int* childExitStatus, struct sigaction sa, int* backgr
             exit(1);
             break;
 
-        case 0: // Child process
+        case 0: /*Child process*/ 
             sa.sa_handler = SIG_DFL;
             sigaction(SIGINT, &sa, NULL);
 
-            // Handle input redirection
+
             if (strcmp(inputName, "")) {
                 input = open(inputName, O_RDONLY);
                 if (input == -1) {
-                    perror("open input");
+                    perror("Unable to open input \n");
                     exit(1);
                 }
                 dup2(input, 0);
@@ -170,7 +172,7 @@ void execCmd(char* arr[], int* childExitStatus, struct sigaction sa, int* backgr
             if (strcmp(outputName, "")) {
                 output = open(outputName, O_WRONLY | O_CREAT | O_TRUNC, 0666);
                 if (output == -1) {
-                    perror("open output");
+                    perror("Unable to open output \n");
                     exit(1);
                 }
                 dup2(output, 1);
@@ -184,19 +186,16 @@ void execCmd(char* arr[], int* childExitStatus, struct sigaction sa, int* backgr
             }
             break;
 
-        default: // Parent process
+        default: /*Parent process*/ 
             if (*background && allowBackground) {
-                // If background process, do not block the terminal
                 printf("background pid is %d\n", spawnPid);
                 fflush(stdout);
-                // Wait for the process but do not block (non-blocking)
                 waitpid(spawnPid, childExitStatus, WNOHANG);
             } else {
-                // If foreground process, wait for it to finish
                 waitpid(spawnPid, childExitStatus, 0);
             }
 
-            // Clean up and check for terminated background processes
+            /*check for terminated background processes*/
             while ((spawnPid = waitpid(-1, childExitStatus, WNOHANG)) > 0) {
                 printf("child %d terminated\n", spawnPid);
                 printExitStatus(*childExitStatus);
@@ -205,6 +204,7 @@ void execCmd(char* arr[], int* childExitStatus, struct sigaction sa, int* backgr
     }
 }
 
+/*Calls the exit status*/
 void printExitStatus(int childExitMethod) {
     if (WIFEXITED(childExitMethod)) {
         printf("exit value %d\n", WEXITSTATUS(childExitMethod));
