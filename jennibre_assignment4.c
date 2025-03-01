@@ -161,7 +161,7 @@ void excmd(char* arr[], int* childExitStatus, struct sigaction sa, int* backgrou
             if (strcmp(inputName, "")) {
                 input = open(inputName, O_RDONLY);
                 if (input == -1) {
-                    perror("Unable to open input \n");
+                    perror("open input");
                     exit(1);
                 }
                 dup2(input, 0);
@@ -172,7 +172,7 @@ void excmd(char* arr[], int* childExitStatus, struct sigaction sa, int* backgrou
             if (strcmp(outputName, "")) {
                 output = open(outputName, O_WRONLY | O_CREAT | O_TRUNC, 0666);
                 if (output == -1) {
-                    perror("Unable to open output \n");
+                    perror("open output");
                     exit(1);
                 }
                 dup2(output, 1);
