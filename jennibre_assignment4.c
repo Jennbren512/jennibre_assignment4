@@ -17,7 +17,13 @@ void catchSIGTSTP(int);
 void printExitStatus(int);
 void catchSIGCHLD(int);
 
-/* Handle SIGTSTP (^Z) to toggle foreground-only mode */
+/* SIGINT handler */
+void catchSIGINT(int signo) {
+    printf("Caught SIGINT\n");
+    fflush(stdout);
+}
+
+/* SIGTSTP handler - toggles foreground-only mode */
 void catchSIGTSTP(int signo) {
     if (allowBackground) {
         char* message = "Entering foreground-only mode (& is now ignored)\n";
@@ -30,15 +36,18 @@ void catchSIGTSTP(int signo) {
     }
 }
 
-/* Handle SIGCHLD to detect when background processes exit */
+/* SIGCHLD handler - detects background process termination */
 void catchSIGCHLD(int signo) {
     int childExitStatus;
     pid_t childPid;
 
     while ((childPid = waitpid(-1, &childExitStatus, WNOHANG)) > 0) {
-        printf("child %d terminated\n", childPid);
-        printExitStatus(childExitStatus);
-        fflush(stdout);
+        if (WIFEXITED(childExitStatus)) {
+            printf("background pid %d is done: exit value %d\n", childPid, WEXITSTATUS(childExitStatus));
+        } else {
+            printf("background pid %d is done: terminated by signal %d\n", childPid, WTERMSIG(childExitStatus));
+        }
+        fflush(stdout);  // Ensure immediate output
     }
 }
 
@@ -54,21 +63,21 @@ int main() {
     char outputFile[256] = "";
     char* input[512] = {NULL};
 
-    /* Ignore SIGINT (^C) */
+    /* Ignore ^C */
     struct sigaction sa_sigint = {0};
     sa_sigint.sa_handler = SIG_IGN;
     sigfillset(&sa_sigint.sa_mask);
     sa_sigint.sa_flags = 0;
     sigaction(SIGINT, &sa_sigint, NULL);
 
-    /* Handle SIGTSTP (^Z) */
+    /* Handle ^Z to toggle foreground-only mode */
     struct sigaction sa_sigtstp = {0};
     sa_sigtstp.sa_handler = catchSIGTSTP;
     sigfillset(&sa_sigtstp.sa_mask);
     sa_sigtstp.sa_flags = SA_RESTART;
     sigaction(SIGTSTP, &sa_sigtstp, NULL);
 
-    /* Handle SIGCHLD (background process termination) */
+    /* Handle background process exits */
     struct sigaction sa_sigchld = {0};
     sa_sigchld.sa_handler = catchSIGCHLD;
     sigfillset(&sa_sigchld.sa_mask);
