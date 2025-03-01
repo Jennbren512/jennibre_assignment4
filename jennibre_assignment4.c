@@ -23,7 +23,7 @@ void catchSIGINT(int signo) {
     fflush(stdout);
 }
 
-/* SIGTSTP handler - toggles foreground-only mode */
+/* SIGTSTP handler foreground-only mode */
 void catchSIGTSTP(int signo) {
     if (allowBackground) {
         char* message = "Entering foreground-only mode (& is now ignored)\n";
@@ -36,7 +36,7 @@ void catchSIGTSTP(int signo) {
     }
 }
 
-/* SIGCHLD handler - detects background process termination */
+/* SIGCHLD handler background process termination */
 void catchSIGCHLD(int signo) {
     int childExitStatus;
     pid_t childPid;
@@ -47,7 +47,7 @@ void catchSIGCHLD(int signo) {
         } else {
             printf("background pid %d is done: terminated by signal %d\n", childPid, WTERMSIG(childExitStatus));
         }
-        fflush(stdout);  // Ensure immediate output
+        fflush(stdout);
     }
 }
 
@@ -154,7 +154,6 @@ void getInput(char* arr[], int* background, char inputName[], char outputName[],
             arr[i] = malloc(strlen(token) + 10);
             strcpy(arr[i], token);
 
-            // Replace $$ with PID
             char* pidPos = strstr(arr[i], "$$");
             if (pidPos) {
                 snprintf(arr[i], 256, "%.*s%d", (int)(pidPos - arr[i]), arr[i], pid);
