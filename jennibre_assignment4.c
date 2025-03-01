@@ -33,6 +33,7 @@ void catchSIGTSTP(int signo) {
     }
 }
 
+/*Main function*/
 int main() {
     int pid = getpid();
     int cont = 1;
@@ -44,16 +45,15 @@ int main() {
     char outputFile[256] = "";
     char* input[512] = {NULL};
 
-    // Signal Handlers
 
-    /*Ignore ^C*/
+    /* Ignore ^C*/
     struct sigaction sa_sigint = {0};
     sa_sigint.sa_handler = SIG_IGN;
     sigfillset(&sa_sigint.sa_mask);
     sa_sigint.sa_flags = 0;
     sigaction(SIGINT, &sa_sigint, NULL);
 
-    /*Handle ^Z*/
+    /*Handle ^Z to toggle foreground-only mode*/
     struct sigaction sa_sigtstp = {0};
     sa_sigtstp.sa_handler = catchSIGTSTP;
     sigfillset(&sa_sigtstp.sa_mask);
@@ -97,7 +97,7 @@ int main() {
     return 0;
 }
 
-/*Prompts the input and parses the input into an array*/
+/*Prompts the user for input and parses it into an array*/
 void getInput(char* arr[], int* background, char inputName[], char outputName[], int pid) {
     char input[INPUTLENGTH];
 
@@ -106,7 +106,7 @@ void getInput(char* arr[], int* background, char inputName[], char outputName[],
         return;
     }
 
-    input[strcspn(input, "\n")] = '\0'; // Remove newline
+    input[strcspn(input, "\n")] = '\0';
 
     if (strlen(input) == 0) {
         arr[0] = strdup("");
@@ -142,7 +142,7 @@ void getInput(char* arr[], int* background, char inputName[], char outputName[],
     arr[i] = NULL;
 }
 
-/*Executes the command that is passed into the array*/
+/*execute the command parsed into the array*/
 void excmd(char* arr[], int* childExitStatus, struct sigaction sa, int* background, char inputName[], char outputName[]) {
     int input, output;
     pid_t spawnPid = fork();
@@ -153,10 +153,9 @@ void excmd(char* arr[], int* childExitStatus, struct sigaction sa, int* backgrou
             exit(1);
             break;
 
-        case 0: /*Child process*/ 
+        case 0: /* Child process*/
             sa.sa_handler = SIG_DFL;
             sigaction(SIGINT, &sa, NULL);
-
 
             if (strcmp(inputName, "")) {
                 input = open(inputName, O_RDONLY);
@@ -168,7 +167,6 @@ void excmd(char* arr[], int* childExitStatus, struct sigaction sa, int* backgrou
                 close(input);
             }
 
-            // Handle output redirection
             if (strcmp(outputName, "")) {
                 output = open(outputName, O_WRONLY | O_CREAT | O_TRUNC, 0666);
                 if (output == -1) {
@@ -179,14 +177,13 @@ void excmd(char* arr[], int* childExitStatus, struct sigaction sa, int* backgrou
                 close(output);
             }
 
-            // Execute the command
             if (execvp(arr[0], arr) == -1) {
                 perror("execvp");
                 exit(2);
             }
             break;
 
-        default: /*Parent process*/ 
+        default: /* Parent process*/
             if (*background && allowBackground) {
                 printf("background pid is %d\n", spawnPid);
                 fflush(stdout);
@@ -195,7 +192,6 @@ void excmd(char* arr[], int* childExitStatus, struct sigaction sa, int* backgrou
                 waitpid(spawnPid, childExitStatus, 0);
             }
 
-            /*check for terminated background processes*/
             while ((spawnPid = waitpid(-1, childExitStatus, WNOHANG)) > 0) {
                 printf("child %d terminated\n", spawnPid);
                 printExitStatus(*childExitStatus);
@@ -204,7 +200,7 @@ void excmd(char* arr[], int* childExitStatus, struct sigaction sa, int* backgrou
     }
 }
 
-/*Calls the exit status*/
+/*Calls Exit status*/
 void printExitStatus(int childExitMethod) {
     if (WIFEXITED(childExitMethod)) {
         printf("exit value %d\n", WEXITSTATUS(childExitMethod));
